@@ -28,11 +28,9 @@ await png(512, resolve(root, 'public/icon.png'));
 await png(120, resolve(root, 'public/icon-120.png'));
 
 // Трей: монохромная версия на прозрачном фоне
-const traySvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path d="M32 6 52 15v14c0 11-7.2 19.5-20 23-12.8-3.5-20-12-20-23V15z" fill="none" stroke="#ffffff" stroke-width="4.4" stroke-linejoin="round"/>
-  <path d="M32 22v9.5" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round"/>
-  <path d="M25.5 27a9 9 0 1 0 13 0" fill="none" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round"/>
-</svg>`;
+const traySvg = svg.toString('utf8')
+  .replace(/<!-- плитка -->[\s\S]*?<!-- щит -->/, '')
+  .replace(/#73dfc2/g, '#ffffff');
 const trayBuf = await sharp(Buffer.from(traySvg), { density: 384 }).resize(32, 32).png().toBuffer();
 await writeFile(resolve(root, 'resources/tray.png'), trayBuf);
 const tray2x = await sharp(Buffer.from(traySvg), { density: 384 }).resize(64, 64).png().toBuffer();
@@ -78,7 +76,7 @@ if (!existsSync(androidRes)) {
   const defsEnd = source.indexOf('</defs>') + '</defs>'.length;
   const head = source.slice(0, defsEnd);
   let body = source.slice(defsEnd, source.lastIndexOf('</svg>'));
-  // убираем плитку и блик — остаются щит и глиф
+  // убираем плитку и блик — остаётся абстрактный знак
   body = body.replace(/<!-- плитка -->[\s\S]*?<!-- щит -->/, '<!-- щит -->');
 
   // foreground адаптивной иконки: логотип в безопасной зоне (66%)
