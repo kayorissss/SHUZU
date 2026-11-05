@@ -1,0 +1,26 @@
+node_modules/
+dist/
+release/
+out/
+*.log
+.DS_Store
+.env
+.env.local
+cores/
+resources/core/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+*.keystore
+*.jks
+coverage/
+.vite/
+.cache/
+
+# Private release signing material
+.signing/
+android/keystore.properties
+*.p12
+*.pfx

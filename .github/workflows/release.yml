@@ -1,0 +1,210 @@
+name: Release
+
+# Собирает .exe и .apk и публикует их одним релизом.
+# Запуск: тег вида v1.0.0 (или вручную через workflow_dispatch).
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза (например v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+env:
+  SINGBOX_VERSION: '1.14.4'
+  HEV_VERSION: '3.0.1'
+  NODE_VERSION: '22'
+
+jobs:
+  windows:
+    name: Windows .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Кэш ядер
+        uses: actions/cache@v4
+        with:
+          path: .cache/cores
+          key: cores-${{ env.SINGBOX_VERSION }}-${{ env.HEV_VERSION }}
+
+      - run: npm ci
+
+      - run: npm run build
+      - run: npm run electron:build
+
+      - name: Скачивание ядер (sing-box.exe + wintun.dll)
+        shell: bash
+        run: bash scripts/fetch-cores.sh
+
+      - name: Проверка, что ядро в сборке
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la cores/win-x64
+          test -f cores/win-x64/sing-box.exe
+
+      - name: Сборка установщика
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win --publish never
+
+      - name: Контрольные суммы
+        shell: bash
+        run: |
+          cd release
+          sha256sum *.exe > SHA256SUMS-windows.txt
+          cat SHA256SUMS-windows.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            release/*.exe
+            release/latest.yml
+            release/SHA256SUMS-windows.txt
+          retention-days: 14
+
+  android:
+    name: Android .apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Кэш ядер
+        uses: actions/cache@v4
+        with:
+          path: .cache/cores
+          key: cores-${{ env.SINGBOX_VERSION }}-${{ env.HEV_VERSION }}
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Скачивание ядер
+        run: bash scripts/fetch-cores.sh
+
+      - name: Проверка ядер в проекте
+        run: |
+          set -euo pipefail
+          ls -la android/app/src/main/jniLibs/*/
+          test -f android/app/libs/hev-socks5-tunnel.aar
+
+      - name: Постоянный ключ подписи (обязателен)
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing Android signing secret: $name (see docs/SIGNING.md)"
+              exit 1
+            fi
+          done
+          umask 077
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/shuzu-release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=app/shuzu-release.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Сборка APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Удаление временного ключа
+        if: always()
+        run: rm -f android/app/shuzu-release.keystore android/keystore.properties
+
+      - name: Переименование и контрольная сумма
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          cd android/app/build/outputs/apk/release
+          APK="$(ls *.apk | head -1)"
+          mv "$APK" "SHUZU-${VERSION}-android.apk"
+          sha256sum "SHUZU-${VERSION}-android.apk" > SHA256SUMS-android.txt
+          cat SHA256SUMS-android.txt
+          echo "APK_NAME=SHUZU-${VERSION}-android.apk" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/release/SHA256SUMS-android.txt
+          retention-days: 14
+
+  publish:
+    name: Публикация релиза
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Состав релиза
+        run: find artifacts -type f | sort
+
+      - name: Версия
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="v${VERSION}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Заметки к релизу
+        run: node scripts/release-notes.mjs "${{ steps.version.outputs.version }}" > RELEASE_NOTES.md
+
+      - name: Создание релиза
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          FILES="$(find artifacts -type f \( -name '*.exe' -o -name '*.apk' -o -name 'SHA256SUMS-*.txt' \) | tr '\n' ' ')"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES \
+              --title "SHUZU ${{ steps.version.outputs.version }}" \
+              --notes-file RELEASE_NOTES.md \
+              --latest
+          fi

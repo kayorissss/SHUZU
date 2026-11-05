@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SHUZU</string>
+    <string name="title_activity_main">SHUZU</string>
+    <string name="package_name">com.shuzu.app</string>
+    <string name="custom_url_scheme">com.shuzu.app</string>
+</resources>

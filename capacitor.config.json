@@ -1,0 +1,15 @@
+{
+  "appId": "com.shuzu.app",
+  "appName": "SHUZU",
+  "webDir": "dist/renderer",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#08080a"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

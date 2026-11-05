@@ -1,0 +1,78 @@
+appId: com.shuzu.app
+productName: SHUZU
+copyright: Copyright © 2026 SHUZU
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/main/**/*
+  - dist/renderer/**/*
+  - package.json
+  - '!**/*.map'
+  # рендерер и main собраны бандлами — node_modules в сборку не нужны
+  - '!node_modules/**'
+
+extraResources:
+  - from: cores/${os}-${arch}
+    to: core
+    filter:
+      - '**/*'
+  - from: resources/icon.png
+    to: icon.png
+
+asar: true
+asarUnpack:
+  - dist/renderer/**
+
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: SHUZU-Setup-${version}-${arch}.${ext}
+  # подпись не настроена: Windows покажет предупреждение SmartScreen
+  signAndEditExecutable: true
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SHUZU
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+
+portable:
+  artifactName: SHUZU-Portable-${version}.${ext}
+
+mac:
+  category: public.app-category.utilities
+  icon: resources/icon.png
+  target:
+    - dmg
+    - zip
+  artifactName: SHUZU-${version}-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+linux:
+  icon: resources/icon.png
+  category: Network
+  target:
+    - AppImage
+    - deb
+  artifactName: SHUZU-${version}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: kayorissss
+  repo: SHUZU
+  releaseType: release
