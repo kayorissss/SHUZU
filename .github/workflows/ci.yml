@@ -68,7 +68,7 @@ jobs:
           export ENABLE_DEPRECATED_OUTBOUND_DOMAIN_RESOLVER=true
           for cfg in .cache/configs/*.json; do
             echo "→ $cfg"
-            if ! "$SB" check -D .cache/singbox -c "$cfg" > /tmp/singbox-check.log 2>&1; then
+            if ! "$SB" check -D .cache/singbox -c "$(realpath "$cfg")" > /tmp/singbox-check.log 2>&1; then
               cat /tmp/singbox-check.log
               while IFS= read -r line; do echo "::error::$line"; done < /tmp/singbox-check.log
               exit 1
@@ -126,7 +126,7 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/android-build.log || {
-            grep -A 8 -E '^\* What went wrong:|^.*error:|^Caused by:' /tmp/android-build.log | head -20 | while IFS= read -r line; do echo "::error::$line"; done
+            grep -A 8 -E 'Error:|uses-sdk|Attribute |^\* What went wrong:|^.*error:|^Caused by:' /tmp/android-build.log | head -20 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
 
