@@ -8,7 +8,7 @@ if (keystorePropsFile.exists()) {
 def hasReleaseKeystore = keystoreProps.containsKey('storeFile') && rootProject.file(keystoreProps['storeFile']).exists()
 
 // Версия приложения берётся из package.json — один источник правды для EXE и APK.
-def pkg = new groovy.json.JsonSlurper().parseText(rootProject.file('../package.json').text())
+def pkg = new groovy.json.JsonSlurper().parseText(rootProject.file('../package.json').text)
 def baseVersion = (pkg.version ?: '1.0.0').toString().replaceAll(/[^0-9.]/, '')
 def vParts = baseVersion.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
 while (vParts.size() < 3) { vParts << 0 }
