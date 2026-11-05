@@ -320,7 +320,6 @@ export function buildSingboxConfig(opts: BuildOptions): BuiltConfig {
       tag: 'socks-in',
       listen: '127.0.0.1',
       listen_port: opts.socksPort,
-      udp: true,
     });
   } else if (opts.mode === 'tun') {
     inbounds.push({

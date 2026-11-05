@@ -275,7 +275,7 @@ test('конфиг: Android использует SOCKS-вход и без TUN', 
   const cfg = built.config as Record<string, any>;
   assert.equal(cfg.inbounds[0].type, 'socks');
   assert.equal(cfg.inbounds[0].listen_port, 10808);
-  assert.equal(cfg.inbounds[0].udp, true);
+  assert.equal(cfg.inbounds[0].udp, undefined); // SOCKS supports UDP without a separate option
   assert.equal(cfg.route.auto_detect_interface, false);
   assert.equal(cfg.route.final, SELECT_TAG);
 });
