@@ -65,7 +65,7 @@ jobs:
           chmod +x "$SB"
           "$SB" version
           export ENABLE_DEPRECATED_LEGACY_DNS_SERVERS=true
-          export ENABLE_DEPRECATED_OUTBOUND_DOMAIN_RESOLVER=true
+          export ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER=true
           for cfg in .cache/configs/*.json; do
             echo "→ $cfg"
             if ! "$SB" check -D .cache/singbox -c "$(realpath "$cfg")" > /tmp/singbox-check.log 2>&1; then

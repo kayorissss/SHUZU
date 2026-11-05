@@ -148,7 +148,7 @@ export class Core {
   async checkConfig(configPath: string): Promise<boolean> {
     const bin = this.corePath();
     return new Promise((resolve) => {
-      execFile(bin, ['check', '-c', configPath], { timeout: 20000 }, (err, stdout, stderr) => {
+      execFile(bin, ['check', '-c', configPath], { timeout: 20000, env: { ...process.env, ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true' } }, (err, stdout, stderr) => {
         if (err) {
           this.lastError = (stderr || stdout || err.message).slice(0, 600);
           this.log('error', `Проверка конфига не прошла: ${this.lastError}`);
@@ -204,7 +204,7 @@ export class Core {
       cwd: coreDir(),
       stdio: ['ignore', out ?? 'pipe', out ?? 'pipe'],
       windowsHide: true,
-      env: { ...process.env, ENABLE_DEPRECATED_LEGACY_DNS_SERVERS: 'true', ENABLE_DEPRECATED_OUTBOUND_DOMAIN_RESOLVER: 'true' },
+      env: { ...process.env, ENABLE_DEPRECATED_LEGACY_DNS_SERVERS: 'true', ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER: 'true' },
     });
     if (out !== null) closeSync(out);
     this.proc = child;

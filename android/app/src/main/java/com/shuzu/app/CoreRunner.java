@@ -100,7 +100,7 @@ final class CoreRunner {
             pb.directory(dir(ctx));
             pb.redirectErrorStream(true);
             pb.environment().put("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true");
-            pb.environment().put("ENABLE_DEPRECATED_OUTBOUND_DOMAIN_RESOLVER", "true");
+            pb.environment().put("ENABLE_DEPRECATED_MISSING_DOMAIN_RESOLVER", "true");
             process = pb.start();
             log("INFO ядро запущено: " + bin.getName());
 

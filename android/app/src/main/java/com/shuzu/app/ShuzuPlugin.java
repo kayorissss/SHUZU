@@ -103,7 +103,9 @@ public class ShuzuPlugin extends Plugin {
         conn.setRequestProperty("User-Agent", "SHUZU/1.0 (Android)");
         conn.setRequestProperty("Accept-Encoding", "gzip");
         if (headers != null) {
-            for (String key : headers.keySet()) {
+            java.util.Iterator<String> headerKeys = headers.keys();
+            while (headerKeys.hasNext()) {
+                String key = headerKeys.next();
                 Object v = headers.get(key);
                 if (v != null) conn.setRequestProperty(key, String.valueOf(v));
             }
@@ -161,7 +163,7 @@ public class ShuzuPlugin extends Plugin {
 
             for (int i = 0; i < count; i++) {
                 final int index = i;
-                final JSObject target = targets.getJSONObject(i);
+                final JSObject target = JSObject.fromJSONObject(targets.getJSONObject(i));
                 pool.submit(() -> {
                     String host = target.getString("host");
                     int port = target.optInt("port", 443);
