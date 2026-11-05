@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SINGBOX_VERSION: '1.14.4'
+  HEV_VERSION: '3.0.1'
+  NODE_VERSION: '22'
+
+jobs:
+  checks:
+    name: Типы, тесты, сборка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: Тесты логики
+        run: npm test
+
+      - name: Синтаксис Java (Android)
+        run: npm run check:java
+
+      - name: Смоук-тест интерфейса
+        run: npm run smoke
+
+      - name: Сборка рендерера
+        run: npm run build
+
+      - name: Сборка main-процесса Electron
+        run: npm run electron:build
+
+      - name: Генерация конфигов ядра
+        run: node scripts/check-config.mjs
+
+      - name: Проверка конфигов настоящим sing-box
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/singbox
+          base="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}"
+          curl -fsSL --retry 3 -o /tmp/sing-box.tar.gz \
+            "${base}/sing-box-${SINGBOX_VERSION}-linux-amd64.tar.gz"
+          tar -xzf /tmp/sing-box.tar.gz -C /tmp
+          SB="$(find /tmp -maxdepth 3 -name sing-box -type f | head -1)"
+          chmod +x "$SB"
+          "$SB" version
+          for cfg in .cache/configs/*.json; do
+            echo "→ $cfg"
+            "$SB" check -D .cache/singbox -c "$cfg"
+          done
+
+      - name: Артефакт рендерера
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer
+          path: dist/renderer
+          retention-days: 7
+
+  android-compile:
+    name: Компиляция Android (без релиза)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Кэш ядер
+        uses: actions/cache@v4
+        with:
+          path: .cache/cores
+          key: cores-${{ env.SINGBOX_VERSION }}-${{ env.HEV_VERSION }}
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+
+      - name: Скачивание ядер (sing-box + tun2socks)
+        run: bash scripts/fetch-cores.sh
+
+      - name: Проверка, что ядра на месте
+        run: |
+          set -euo pipefail
+          ls -la android/app/src/main/jniLibs/*/
+          ls -la android/app/libs/
+          test -f android/app/libs/hev-socks5-tunnel.aar
+          test -f android/app/src/main/jniLibs/arm64-v8a/libsingbox_arm64.so
+
+      - name: Сборка APK (debug подпись)
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7

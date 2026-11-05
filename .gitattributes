@@ -1,0 +1,9 @@
+# Общие правила для скриптов и Gradle
+*.sh text eol=lf
+*.mjs text eol=lf
+gradle* text eol=lf
+android/gradlew text eol=lf
+*.bat text eol=crlf
+*.png binary
+*.ico binary
+*.ttf binary

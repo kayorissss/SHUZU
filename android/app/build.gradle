@@ -1,0 +1,110 @@
+apply plugin: 'com.android.application'
+
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+def hasReleaseKeystore = keystoreProps.containsKey('storeFile') && rootProject.file(keystoreProps['storeFile']).exists()
+
+// Версия приложения берётся из package.json — один источник правды для EXE и APK.
+def pkg = new groovy.json.JsonSlurper().parseText(rootProject.file('../package.json').text())
+def baseVersion = (pkg.version ?: '1.0.0').toString().replaceAll(/[^0-9.]/, '')
+def vParts = baseVersion.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
+while (vParts.size() < 3) { vParts << 0 }
+def appVersionCode = vParts[0] * 10000 + vParts[1] * 100 + vParts[2]
+
+android {
+    namespace "com.shuzu.app"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.shuzu.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName baseVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+        ndk {
+            // ядро поставляется для этих архитектур; фильтр не даёт собрать APK без ядра
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // .so из jniLibs должны распаковываться при установке:
+            // Android разрешает exec только из nativeLibraryDir
+            useLegacyPackaging = true
+            keepDebugSymbols += ['**/libsingbox_*.so']
+            // не сжимать бинарники ядра — Go-бинарник не является настоящей .so
+            pickFirsts += ['lib/*/libc++_shared.so']
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Релизы подписываются только постоянным ключом, никогда debug-ключом.
+            signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+repositories {
+    flatDir {
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    // tun2socks: prebuilt AAR (hev.htproxy.TProxyService), кладётся CI в libs/
+    implementation(name: 'hev-socks5-tunnel', ext: 'aar')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+// Не допускаем случайной публикации неподписанного APK или смены debug-ключа CI.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') } && !hasReleaseKeystore) {
+        throw new GradleException('Release signing is required. Configure android/keystore.properties; see docs/SIGNING.md')
+    }
+}
