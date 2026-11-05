@@ -61,9 +61,15 @@ jobs:
           SB="$(find /tmp -maxdepth 3 -name sing-box -type f | head -1)"
           chmod +x "$SB"
           "$SB" version
+          export ENABLE_DEPRECATED_LEGACY_DNS_SERVERS=true
+          export ENABLE_DEPRECATED_OUTBOUND_DOMAIN_RESOLVER=true
           for cfg in .cache/configs/*.json; do
             echo "→ $cfg"
-            "$SB" check -D .cache/singbox -c "$cfg"
+            if ! "$SB" check -D .cache/singbox -c "$cfg" > /tmp/singbox-check.log 2>&1; then
+              cat /tmp/singbox-check.log
+              while IFS= read -r line; do echo "::error::$line"; done < /tmp/singbox-check.log
+              exit 1
+            fi
           done
 
       - name: Артефакт рендерера
@@ -114,7 +120,12 @@ jobs:
 
       - name: Сборка APK (debug подпись)
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/android-build.log || {
+            tail -100 /tmp/android-build.log | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
