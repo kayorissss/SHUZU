@@ -6,12 +6,17 @@ name: Release
 on:
   push:
     tags: ['v*.*.*']
+    branches: ['arena/ac2c48e0-shuzu']
   workflow_dispatch:
     inputs:
       tag:
         description: 'Тег релиза (например v1.0.0)'
         required: true
         default: 'v1.0.0'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -40,6 +45,7 @@ jobs:
           key: cores-${{ env.SINGBOX_VERSION }}-${{ env.HEV_VERSION }}
 
       - run: npm ci
+      - run: npm run verify
 
       - run: npm run build
       - run: npm run electron:build
@@ -101,6 +107,7 @@ jobs:
           key: cores-${{ env.SINGBOX_VERSION }}-${{ env.HEV_VERSION }}
 
       - run: npm ci
+      - run: npm run verify
       - run: npm run build
       - run: npx cap sync android
 
@@ -140,7 +147,12 @@ jobs:
 
       - name: Сборка APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/shuzu-release-build.log || {
+            grep -A 6 -E 'Error:|uses-sdk|Attribute |^\* What went wrong:|^.*error:|^Caused by:' /tmp/shuzu-release-build.log | head -20 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - name: Удаление временного ключа
         if: always()
@@ -206,5 +218,6 @@ jobs:
             gh release create "$TAG" $FILES \
               --title "SHUZU ${{ steps.version.outputs.version }}" \
               --notes-file RELEASE_NOTES.md \
+              --target "${{ github.sha }}" \
               --latest
           fi
